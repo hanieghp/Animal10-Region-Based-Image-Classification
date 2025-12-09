@@ -2,7 +2,7 @@ import os
 import csv
 import cv2
 import numpy as np
-from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
+from skimage.feature import graycomatrix, graycoprops, local_binary_pattern, hog
 from skimage.measure import shannon_entropy
 from scipy.stats import skew, kurtosis
 
@@ -26,6 +26,12 @@ LBP_RADIUS = 2
 LBP_POINTS = 8 * LBP_RADIUS
 LBP_N_BINS = LBP_POINTS + 2  # uniform LBP adds two extra bins
 LBP_METHOD = "uniform"
+
+COLOR_HIST_BINS = 16
+
+HOG_ORIENTATIONS = 9
+HOG_PIXELS_PER_CELL = (16, 16)
+HOG_CELLS_PER_BLOCK = (2, 2)
 
 
 # ==========================
@@ -163,6 +169,32 @@ def compute_lbp_features(gray):
     return hist
 
 
+def compute_color_histograms(img):
+    hist_channels = []
+    for channel in cv2.split(img):
+        hist = cv2.calcHist([channel], [0], None, [COLOR_HIST_BINS], [0, 256])
+        hist = hist.flatten().astype(np.float32)
+        total = hist.sum()
+        if total > 0:
+            hist /= total
+        hist_channels.append(hist)
+    return np.concatenate(hist_channels)
+
+
+def compute_hog_features(gray):
+    gray_float = gray.astype(np.float32, copy=False) / 255.0
+    hog_vec = hog(
+        gray_float,
+        orientations=HOG_ORIENTATIONS,
+        pixels_per_cell=HOG_PIXELS_PER_CELL,
+        cells_per_block=HOG_CELLS_PER_BLOCK,
+        block_norm="L2-Hys",
+        transform_sqrt=True,
+        feature_vector=True,
+    )
+    return hog_vec.astype(np.float32)
+
+
 def process_image(full_path):
     # ابعاد اصلی
     img_orig = read_image(full_path)
@@ -207,6 +239,12 @@ def process_image(full_path):
     # texture via LBP histogram
     lbp_hist = compute_lbp_features(gray)
 
+    # color distribution via normalized histograms per channel
+    color_hist = compute_color_histograms(img)
+
+    # gradient structure via HOG descriptor
+    hog_feats = compute_hog_features(gray)
+
     # فیچرها به ترتیب همان هدر
     feats = [
         aspect_ratio,
@@ -247,6 +285,8 @@ def process_image(full_path):
     ]
 
     feats.extend(lbp_hist.tolist())
+    feats.extend(color_hist.tolist())
+    feats.extend(hog_feats.tolist())
 
     feats = np.array(feats).astype(np.float32, casting="unsafe")
     feats = np.nan_to_num(feats, nan=0.0, posinf=0.0, neginf=0.0)
@@ -276,6 +316,12 @@ def build_feature_csv(data_dir, out_csv="feature2.csv"):
         "contour_area", "contour_perimeter", "compactness",
     ]
     header.extend([f"lbp_hist_{i}" for i in range(LBP_N_BINS)])
+    header.extend([f"color_hist_b_{i}" for i in range(COLOR_HIST_BINS)])
+    header.extend([f"color_hist_g_{i}" for i in range(COLOR_HIST_BINS)])
+    header.extend([f"color_hist_r_{i}" for i in range(COLOR_HIST_BINS)])
+
+    hog_length = compute_hog_features(np.zeros(PROCESS_SIZE, dtype=np.uint8)).size
+    header.extend([f"hog_{i}" for i in range(hog_length)])
 
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
