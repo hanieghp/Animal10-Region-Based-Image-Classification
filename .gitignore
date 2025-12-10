@@ -1,5 +1,4 @@
-Dataset/Animals-10/
+*.csv
+*.pkl
 Dataset/
 newDataset/
-*.pkl
-*.csv
