@@ -6,25 +6,22 @@ from skimage.feature import graycomatrix, graycoprops, local_binary_pattern, hog
 from skimage.measure import shannon_entropy
 from scipy.stats import skew, kurtosis
 
-# ==========================
-# تنظیمات کلی
-# ==========================
 
-DATA_DIR = r"Dataset\Animals-10"  # مسیر دیتاست را در صورت نیاز عوض کن
+DATA_DIR = r"Dataset\Animals-10"  
 
 CLASSES = [
     "butterfly", "cat", "chicken", "cow", "dog",
     "elephant", "horse", "sheep", "spider", "squirrel",
 ]
 
-PROCESS_SIZE = (128, 128)  # اندازه‌ی تصویر برای محاسبه‌ی فیچرها (رزولوشن ثابت)
+PROCESS_SIZE = (128, 128) 
 
 GLCM_DISTANCES = [1]
 GLCM_ANGLES = [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]
 
 LBP_RADIUS = 2
 LBP_POINTS = 8 * LBP_RADIUS
-LBP_N_BINS = LBP_POINTS + 2  # uniform LBP adds two extra bins
+LBP_N_BINS = LBP_POINTS + 2 
 LBP_METHOD = "uniform"
 
 COLOR_HIST_BINS = 16
@@ -33,10 +30,6 @@ HOG_ORIENTATIONS = 9
 HOG_PIXELS_PER_CELL = (16, 16)
 HOG_CELLS_PER_BLOCK = (2, 2)
 
-
-# ==========================
-# توابع کمکی
-# ==========================
 
 def read_image(path: str):
     img = cv2.imread(path, cv2.IMREAD_COLOR)
@@ -196,18 +189,14 @@ def compute_hog_features(gray):
 
 
 def process_image(full_path):
-    # ابعاد اصلی
     img_orig = read_image(full_path)
     _, _, aspect_ratio = compute_basic_dims(img_orig)
 
-    # نسخه‌ی رزولوشن ثابت برای محاسبه‌ی فیچرها
     img = cv2.resize(img_orig, PROCESS_SIZE)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # RGB
     mean_r, mean_g, mean_b, std_r, std_g, std_b = compute_rgb_stats(img)
 
-    # HSV
     mean_h, mean_s, mean_v, std_h, std_s, std_v = compute_hsv_stats(img)
 
     # intensity
@@ -223,8 +212,8 @@ def process_image(full_path):
     ) = compute_intensity_stats(gray)
 
     # brightness & contrast_simple
-    brightness = mean_v           # بر اساس کانال V
-    contrast_simple = std_int     # انحراف معیار شدت خاکستری
+    brightness = mean_v           
+    contrast_simple = std_int     
 
     # GLCM
     contrast, dissimilarity, homogeneity, energy, correlation, ASM = \
@@ -245,7 +234,6 @@ def process_image(full_path):
     # gradient structure via HOG descriptor
     hog_feats = compute_hog_features(gray)
 
-    # فیچرها به ترتیب همان هدر
     feats = [
         aspect_ratio,
         mean_r,
@@ -293,10 +281,6 @@ def process_image(full_path):
 
     return feats
 
-
-# ==========================
-# ساخت feature2.csv
-# ==========================
 
 def build_feature_csv(data_dir, out_csv="feature2.csv"):
     header = [
