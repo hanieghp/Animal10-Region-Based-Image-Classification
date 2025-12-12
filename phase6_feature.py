@@ -8,27 +8,21 @@ from scipy.stats import skew, kurtosis
 from multiprocessing import Pool, cpu_count
 from functools import partial
 
-# ==========================
-# تنظیمات کلی
-# ==========================
 
-DATA_DIR = r"newDataset_train_all"  # مسیر دیتاست train
-TEST_BASE_DIR = r"Dataset\split-animal"  # مسیر پایه دیتاست test
-TEST_IMAGES_PER_CLASS = None  # None = همه تصاویر تست، یا عدد برای محدودیت
 
-CLASSES = [
-    "butterfly", "cat", "chicken", "cow", "dog",
-    "elephant", "horse", "sheep", "spider", "squirrel",
-]
+DATA_DIR = r"newDataset_train_all"  
+TEST_BASE_DIR = r"Dataset\split-animal"  
+TEST_IMAGES_PER_CLASS = None  
+CLASSES = ["butterfly", "cat", "chicken", "cow", "dog", "elephant", "horse", "sheep", "spider", "squirrel",]
 
-PROCESS_SIZE = (128, 128)  # اندازه‌ی تصویر برای محاسبه‌ی فیچرها (رزولوشن ثابت)
+PROCESS_SIZE = (128, 128)  
 
 GLCM_DISTANCES = [1]
 GLCM_ANGLES = [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]
 
 LBP_RADIUS = 2
 LBP_POINTS = 8 * LBP_RADIUS
-LBP_N_BINS = LBP_POINTS + 2  # uniform LBP adds two extra bins
+LBP_N_BINS = LBP_POINTS + 2  
 LBP_METHOD = "uniform"
 
 COLOR_HIST_BINS = 16
@@ -37,10 +31,6 @@ HOG_ORIENTATIONS = 9
 HOG_PIXELS_PER_CELL = (16, 16)
 HOG_CELLS_PER_BLOCK = (2, 2)
 
-
-# ==========================
-# توابع کمکی
-# ==========================
 
 def read_image(path: str):
     img = cv2.imread(path, cv2.IMREAD_COLOR)
@@ -123,7 +113,7 @@ def compute_glcm_features(gray):
     props = ["contrast", "dissimilarity", "homogeneity",
              "energy", "correlation", "ASM"]
     vals = [float(graycoprops(glcm, p).mean()) for p in props]
-    return vals  # [contrast, dissimilarity, homogeneity, energy, correlation, ASM]
+    return vals  
 
 
 def compute_edge_features(gray):
@@ -200,11 +190,9 @@ def compute_hog_features(gray):
 
 
 def process_image(full_path):
-    # ابعاد اصلی
     img_orig = read_image(full_path)
     _, _, aspect_ratio = compute_basic_dims(img_orig)
 
-    # نسخه‌ی رزولوشن ثابت برای محاسبه‌ی فیچرها
     img = cv2.resize(img_orig, PROCESS_SIZE)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -227,8 +215,8 @@ def process_image(full_path):
     ) = compute_intensity_stats(gray)
 
     # brightness & contrast_simple
-    brightness = mean_v           # بر اساس کانال V
-    contrast_simple = std_int     # انحراف معیار شدت خاکستری
+    brightness = mean_v           
+    contrast_simple = std_int    
 
     # GLCM
     contrast, dissimilarity, homogeneity, energy, correlation, ASM = \
@@ -249,7 +237,6 @@ def process_image(full_path):
     # gradient structure via HOG descriptor
     hog_feats = compute_hog_features(gray)
 
-    # فیچرها به ترتیب همان هدر
     feats = [
         aspect_ratio,
         mean_r,
@@ -299,7 +286,6 @@ def process_image(full_path):
 
 
 def process_image_wrapper(args):
-    """Wrapper برای multiprocessing - یک تاپل می‌گیرد و نتیجه برمی‌گرداند"""
     full_path, fname, cls, label_idx, split_type = args
     try:
         feats = process_image(full_path)
@@ -310,10 +296,8 @@ def process_image_wrapper(args):
 
 
 def collect_all_tasks(data_dir, test_base_dir, test_per_class):
-    """جمع‌آوری لیست تمام تسک‌ها برای پردازش موازی"""
     tasks = []
     
-    # تسک‌های TRAIN
     for label_idx, cls in enumerate(CLASSES):
         class_dir = os.path.join(data_dir, cls)
         if not os.path.isdir(class_dir):
@@ -326,7 +310,6 @@ def collect_all_tasks(data_dir, test_base_dir, test_per_class):
             full_path = os.path.join(class_dir, fname)
             tasks.append((full_path, fname, cls, label_idx, "train"))
 
-    # تسک‌های TEST
     for label_idx, cls in enumerate(CLASSES):
         test_class_dir = os.path.join(test_base_dir, cls, "test")
         if not os.path.isdir(test_class_dir):
@@ -345,10 +328,6 @@ def collect_all_tasks(data_dir, test_base_dir, test_per_class):
 
     return tasks
 
-
-# ==========================
-# ساخت feature2.csv
-# ==========================
 
 def build_feature_csv(data_dir, test_base_dir, out_csv="feature100.csv", test_per_class=25):
     header = [
@@ -377,27 +356,22 @@ def build_feature_csv(data_dir, test_base_dir, out_csv="feature100.csv", test_pe
     
     header.insert(3, "split")
 
-    # جمع‌آوری تمام تسک‌ها
     tasks = collect_all_tasks(data_dir, test_base_dir, test_per_class)
     total_tasks = len(tasks)
     print(f"[INFO] Total images to process: {total_tasks}")
 
-    # تعداد پردازش‌های موازی
     num_workers = cpu_count()
     print(f"[INFO] Using {num_workers} CPU cores")
 
-    # پردازش موازی
     results = []
     with Pool(processes=num_workers) as pool:
         for i, result in enumerate(pool.imap_unordered(process_image_wrapper, tasks, chunksize=10)):
             if result is not None:
                 results.append(result)
             
-            # نمایش پیشرفت
             if (i + 1) % 100 == 0 or (i + 1) == total_tasks:
                 print(f"[PROGRESS] {i + 1}/{total_tasks} images processed ({100*(i+1)/total_tasks:.1f}%)")
 
-    # نوشتن نتایج در فایل CSV
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(header)
